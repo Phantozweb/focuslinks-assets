@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IPD Measurement Pro</title>
+    
+    <!-- MediaPipe Vision Tasks -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.min.js" crossorigin="anonymous"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-light: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: white;
+            color: var(--gray-800);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 24px 0;
+            border-bottom: 1px solid var(--gray-200);
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gray-900);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .header p {
+            color: var(--gray-500);
+            margin-top: 8px;
+            font-size: 15px;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loader {
+            width: 56px;
+            height: 56px;
+            border: 3px solid var(--gray-200);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            font-size: 16px;
+            color: var(--gray-600);
+            font-weight: 500;
+        }
+
+        .loading-subtext {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--gray-400);
+        }
+
+        /* Camera Section */
+        .camera-section {
+            display: grid;
+            gap: 24px;
+        }
+
+        @media (min-width: 768px) {
+            .camera-section {
+                grid-template-columns: 1fr 320px;
+            }
+        }
+
+        .camera-container {
+            position: relative;
+            background: var(--gray-900);
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            box-shadow: var(--shadow-xl);
+        }
+
+        .camera-container video,
+        .camera-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-container canvas {
+            z-index: 10;
+        }
+
+        /* Face Guide */
+        .face-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 280px;
+            border: 2px dashed var(--gray-400);
+            border-radius: 50%;
+            z-index: 5;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .face-guide.detected {
+            border-color: var(--success);
+            opacity: 0.8;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            padding: 8px 14px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: white;
+            z-index: 20;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-dot.warning { background: var(--warning); }
+        .status-dot.danger { background: var(--danger); }
+
+        /* Capture Button */
+        .capture-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid var(--gray-300);
+            cursor: pointer;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .capture-btn:hover {
+            transform: translateX(-50%) scale(1.05);
+            border-color: var(--primary);
+        }
+
+        .capture-btn:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+
+        .capture-btn i {
+            color: var(--primary);
+        }
+
+        /* Metrics Panel */
+        .metrics-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .metric-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .metric-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .metric-icon.blue { background: #dbeafe; color: var(--primary); }
+        .metric-icon.green { background: #d1fae5; color: var(--success); }
+        .metric-icon.orange { background: #fef3c7; color: var(--warning); }
+        .metric-icon.purple { background: #ede9fe; color: #7c3aed; }
+
+        .metric-title {
+            font-size: 13px;
+            color: var(--gray-500);
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--gray-900);
+            line-height: 1;
+        }
+
+        .metric-value span {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--gray-500);
+        }
+
+        .metric-status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .metric-status.good {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .metric-status.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .metric-status.bad {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--gray-200);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s, background 0.3s;
+        }
+
+        .progress-fill.good { background: var(--success); }
+        .progress-fill.warning { background: var(--warning); }
+        .progress-fill.bad { background: var(--danger); }
+
+        /* Instructions */
+        .instructions {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 24px;
+        }
+
+        .instructions h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .instructions ul {
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+
+        .instructions li {
+            font-size: 13px;
+            color: var(--gray-600);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .instructions li i {
+            color: var(--success);
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Results Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+            padding: 24px;
+            box-shadow: var(--shadow-xl);
+            transform: scale(0.9);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.show .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .modal-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #d1fae5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+
+        .modal-icon i {
+            color: var(--success);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .modal-results {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--gray-50);
+            border-radius: 10px;
+        }
+
+        .result-label {
+            font-size: 14px;
+            color: var(--gray-600);
+        }
+
+        .result-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .modal-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-btn.primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .modal-btn.secondary {
+            background: var(--gray-100);
+            color: var(--gray-700);
+            margin-top: 10px;
+        }
+
+        .modal-btn.secondary:hover {
+            background: var(--gray-200);
+        }
+
+        /* History Section */
+        .history-section {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .history-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-900);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .clear-btn {
+            font-size: 13px;
+            color: var(--gray-500);
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .clear-btn:hover {
+            color: var(--danger);
+        }
+
+        .history-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: var(--gray-50);
+            border-radius: 10px;
+        }
+
+        .history-ipd {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .history-meta {
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 32px;
+            color: var(--gray-400);
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 767px) {
+            .container {
+                padding: 16px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .camera-container {
+                aspect-ratio: 3/4;
+            }
+
+            .metric-value {
+                font-size: 28px;
+            }
+
+            .face-guide {
+                width: 160px;
+                height: 220px;
+            }
+        }
+
+        /* WebGPU Badge */
+        .webgpu-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Accuracy indicator */
+        .accuracy-ring {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+        }
+
+        .accuracy-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .accuracy-ring circle {
+            fill: none;
+            stroke-width: 6;
+        }
+
+        .accuracy-ring .bg {
+            stroke: var(--gray-200);
+        }
+
+        .accuracy-ring .progress {
+            stroke: var(--success);
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s;
+        }
+
+        .accuracy-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loader"></div>
+        <div class="loading-text" id="loadingText">Initializing AI Model...</div>
+        <div class="loading-subtext" id="loadingSubtext">This may take a few moments</div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>
+                <i data-lucide="scan-face" style="width: 32px; height: 32px; color: var(--primary);"></i>
+                IPD Measurement Pro
+            </h1>
+            <p>Precise interpupillary distance measurement using AI face detection</p>
+        </header>
+
+        <!-- Camera Section -->
+        <div class="camera-section">
+            <!-- Camera View -->
+            <div class="camera-container" id="cameraContainer">
+                <video id="video" playsinline autoplay muted></video>
+                <canvas id="canvas"></canvas>
+                <div class="face-guide" id="faceGuide"></div>
+                
+                <div class="status-badge" id="statusBadge">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Initializing...</span>
+                </div>
+
+                <div class="webgpu-badge" id="webgpuBadge" style="display: none;">
+                    <i data-lucide="zap" style="width: 12px; height: 12px;"></i>
+                    WebGPU
+                </div>
+
+                <button class="capture-btn" id="captureBtn" disabled>
+                    <i data-lucide="camera" style="width: 28px; height: 28px;"></i>
+                </button>
+            </div>
+
+            <!-- Metrics Panel -->
+            <div class="metrics-panel">
+                <!-- IPD Metric -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon blue">
+                            <i data-lucide="ruler" style="width: 18px; height: 18px;"></i>
+                        </div>
+                        <span class="metric-title">INTERPUPILLARY DISTANCE</span>
+                    </div>
+                    <div class="metric-value" id="ipdValue">--<span>mm</span></div>
+                    <div class="metric-status" id="ipdStatus" style="display: none;">
+                        <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i>
+                        <span></span>
+                    </div>
+                </div>
+
+                <!-- Distance Metric -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon green">
+                            <i data-lucide="move" style="width: 18px; height: 18px;"></i>
+                        </div>
+                        <span class="metric-title">DISTANCE FROM CAMERA</span>
+                    </div>
+                    <div class="metric-value" id="distanceValue">--<span>cm</span></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="distanceFill" style="width: 0%"></div>
+                    </div>
+                    <div class="metric-status" id="distanceStatus" style="display: none;">
+                        <i data-lucide="info" style="width: 14px; height: 14px;"></i>
+                        <span></span>
+                    </div>
+                </div>
+
+                <!-- Lighting Metric -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon orange">
+                            <i data-lucide="sun" style="width: 18px; height: 18px;"></i>
+                        </div>
+                        <span class="metric-title">LIGHTING QUALITY</span>
+                    </div>
+                    <div class="metric-value" id="lightingValue">--<span>%</span></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="lightingFill" style="width: 0%"></div>
+                    </div>
+                    <div class="metric-status" id="lightingStatus" style="display: none;">
+                        <i data-lucide="info" style="width: 14px; height: 14px;"></i>
+                        <span></span>
+                    </div>
+                </div>
+
+                <!-- Accuracy Metric -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon purple">
+                            <i data-lucide="target" style="width: 18px; height: 18px;"></i>
+                        </div>
+                        <span class="metric-title">MEASUREMENT ACCURACY</span>
+                    </div>
+                    <div class="accuracy-ring">
+                        <svg width="80" height="80">
+                            <circle class="bg" cx="40" cy="40" r="34"></circle>
+                            <circle class="progress" id="accuracyProgress" cx="40" cy="40" r="34" 
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"></circle>
+                        </svg>
+                        <div class="accuracy-value" id="accuracyValue">--%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h3>
+                <i data-lucide="lightbulb" style="width: 16px; height: 16px; color: var(--warning);"></i>
+                Tips for Accurate Measurement
+            </h3>
+            <ul>
+                <li>
+                    <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+                    Position your face within the oval guide
+                </li>
+                <li>
+                    <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+                    Maintain a distance of 30-50 cm from the camera
+                </li>
+                <li>
+                    <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+                    Ensure even lighting on your face (avoid harsh shadows)
+                </li>
+                <li>
+                    <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+                    Look directly at the camera with a neutral expression
+                </li>
+                <li>
+                    <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+                    Remove glasses for most accurate results
+                </li>
+            </ul>
+        </div>
+
+        <!-- History Section -->
+        <div class="history-section">
+            <div class="history-header">
+                <h3 class="history-title">
+                    <i data-lucide="history" style="width: 18px; height: 18px;"></i>
+                    Measurement History
+                </h3>
+                <button class="clear-btn" id="clearHistory">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                    Clear
+                </button>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="history-empty">
+                    <i data-lucide="inbox" style="width: 32px; height: 32px; margin-bottom: 8px;"></i>
+                    <p>No measurements yet</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div class="modal-overlay" id="resultsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-icon">
+                    <i data-lucide="check" style="width: 32px; height: 32px;"></i>
+                </div>
+                <h2 class="modal-title">Measurement Complete</h2>
+            </div>
+            <div class="modal-results">
+                <div class="result-row">
+                    <span class="result-label">IPD (Interpupillary Distance)</span>
+                    <span class="result-value" id="resultIpd">-- mm</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Left Pupil to Center</span>
+                    <span class="result-value" id="resultLeft">-- mm</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Right Pupil to Center</span>
+                    <span class="result-value" id="resultRight">-- mm</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Measurement Accuracy</span>
+                    <span class="result-value" id="resultAccuracy">--%</span>
+                </div>
+            </div>
+            <button class="modal-btn primary" id="saveResult">
+                <i data-lucide="save" style="width: 18px; height: 18px;"></i>
+                Save Measurement
+            </button>
+            <button class="modal-btn secondary" id="closeModal">
+                <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+                Close
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Global variables
+        let faceLandmarker = null;
+        let video = null;
+        let canvas = null;
+        let ctx = null;
+        let isDetecting = false;
+        let lastResults = null;
+        let measurementHistory = [];
+        let webgpuSupported = false;
+
+        // DOM Elements
+        const loadingScreen = document.getElementById('loadingScreen');
+        const loadingText = document.getElementById('loadingText');
+        const loadingSubtext = document.getElementById('loadingSubtext');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const faceGuide = document.getElementById('faceGuide');
+        const captureBtn = document.getElementById('captureBtn');
+        const webgpuBadge = document.getElementById('webgpuBadge');
+
+        // Metric elements
+        const ipdValue = document.getElementById('ipdValue');
+        const ipdStatus = document.getElementById('ipdStatus');
+        const distanceValue = document.getElementById('distanceValue');
+        const distanceFill = document.getElementById('distanceFill');
+        const distanceStatus = document.getElementById('distanceStatus');
+        const lightingValue = document.getElementById('lightingValue');
+        const lightingFill = document.getElementById('lightingFill');
+        const lightingStatus = document.getElementById('lightingStatus');
+        const accuracyValue = document.getElementById('accuracyValue');
+        const accuracyProgress = document.getElementById('accuracyProgress');
+
+        // Modal elements
+        const resultsModal = document.getElementById('resultsModal');
+        const resultIpd = document.getElementById('resultIpd');
+        const resultLeft = document.getElementById('resultLeft');
+        const resultRight = document.getElementById('resultRight');
+        const resultAccuracy = document.getElementById('resultAccuracy');
+        const saveResult = document.getElementById('saveResult');
+        const closeModal = document.getElementById('closeModal');
+
+        // History elements
+        const historyList = document.getElementById('historyList');
+        const clearHistory = document.getElementById('clearHistory');
+
+        // Constants for IPD calculation
+        const AVERAGE_IRIS_DIAMETER_MM = 11.7;
+        const IDEAL_DISTANCE_CM = 40;
+        const MIN_DISTANCE_CM = 25;
+        const MAX_DISTANCE_CM = 60;
+
+        // Face landmark indices for iris
+        const LEFT_IRIS_CENTER = 468;
+        const RIGHT_IRIS_CENTER = 473;
+        const LEFT_IRIS_POINTS = [469, 470, 471, 472];
+        const RIGHT_IRIS_POINTS = [474, 475, 476, 477];
+
+        // Initialize the application
+        async function init() {
+            try {
+                // Check WebGPU support
+                webgpuSupported = await checkWebGPUSupport();
+                if (webgpuSupported) {
+                    webgpuBadge.style.display = 'flex';
+                }
+
+                // Load face landmarker model
+                await loadModel();
+
+                // Start camera
+                await startCamera();
+
+                // Hide loading screen
+                loadingScreen.classList.add('hidden');
+
+                // Enable capture button
+                captureBtn.disabled = false;
+
+                // Start detection loop
+                startDetection();
+
+            } catch (error) {
+                console.error('Initialization error:', error);
+                loadingText.textContent = 'Error loading model';
+                loadingSubtext.textContent = error.message;
+            }
+        }
+
+        // Check WebGPU support
+        async function checkWebGPUSupport() {
+            if ('gpu' in navigator) {
+                try {
+                    const adapter = await navigator.gpu.requestAdapter();
+                    return adapter !== null;
+                } catch (e) {
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        // Load MediaPipe Face Landmarker
+        async function loadModel() {
+            loadingText.textContent = 'Loading AI Model...';
+            loadingSubtext.textContent = 'Downloading face detection model';
+
+            const { FaceLandmarker, FilesetResolver } = await import(
+                'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm'
+            );
+
+            loadingSubtext.textContent = 'Initializing face landmarker...';
+
+            const filesetResolver = await FilesetResolver.forVisionTasks(
+                'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+            );
+
+            faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+                baseOptions: {
+                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+                    delegate: webgpuSupported ? 'GPU' : 'CPU'
+                },
+                outputFaceBlendshapes: false,
+                outputFacialTransformationMatrixes: false,
+                runningMode: 'VIDEO',
+                numFaces: 1
+            });
+
+            loadingText.textContent = 'Model Loaded!';
+            loadingSubtext.textContent = 'Starting camera...';
+        }
+
+        // Start camera
+        async function startCamera() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+
+            const constraints = {
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+
+            await new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    resolve();
+                };
+            });
+
+            await video.play();
+        }
+
+        // Start detection loop
+        function startDetection() {
+            isDetecting = true;
+            detectFace();
+        }
+
+        // Main detection loop
+        async function detectFace() {
+            if (!isDetecting || !faceLandmarker) return;
+
+            const startTime = performance.now();
+            const results = faceLandmarker.detectForVideo(video, startTime);
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                lastResults = results;
+                const landmarks = results.faceLandmarks[0];
+
+                // Update status
+                updateStatus('Face Detected', 'success');
+                faceGuide.classList.add('detected');
+
+                // Draw landmarks
+                drawLandmarks(landmarks);
+
+                // Calculate and display metrics
+                const metrics = calculateMetrics(landmarks);
+                updateMetricsDisplay(metrics);
+
+            } else {
+                lastResults = null;
+                updateStatus('No Face Detected', 'warning');
+                faceGuide.classList.remove('detected');
+                resetMetrics();
+            }
+
+            // Continue detection loop
+            requestAnimationFrame(detectFace);
+        }
+
+        // Draw face landmarks
+        function drawLandmarks(landmarks) {
+            // Draw face mesh connections (simplified)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+
+            // Draw all landmarks as small dots
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            landmarks.forEach((point, index) => {
+                const x = point.x * canvas.width;
+                const y = point.y * canvas.height;
+                ctx.beginPath();
+                ctx.arc(x, y, 1, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Highlight iris centers
+            const leftIris = landmarks[LEFT_IRIS_CENTER];
+            const rightIris = landmarks[RIGHT_IRIS_CENTER];
+
+            if (leftIris && rightIris) {
+                // Draw left iris
+                ctx.fillStyle = '#3b82f6';
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(leftIris.x * canvas.width, leftIris.y * canvas.height, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw right iris
+                ctx.beginPath();
+                ctx.arc(rightIris.x * canvas.width, rightIris.y * canvas.height, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw line between irises
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(leftIris.x * canvas.width, leftIris.y * canvas.height);
+                ctx.lineTo(rightIris.x * canvas.width, rightIris.y * canvas.height);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw iris circles
+                const leftIrisRadius = calculateIrisRadius(landmarks, 'left');
+                const rightIrisRadius = calculateIrisRadius(landmarks, 'right');
+
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(leftIris.x * canvas.width, leftIris.y * canvas.height, leftIrisRadius, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(rightIris.x * canvas.width, rightIris.y * canvas.height, rightIrisRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Draw face outline
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+            ctx.lineWidth = 2;
+            
+            // Face contour indices
+            const faceContour = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10];
+            
+            ctx.beginPath();
+            faceContour.forEach((index, i) => {
+                const point = landmarks[index];
+                const x = point.x * canvas.width;
+                const y = point.y * canvas.height;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // Calculate iris radius in pixels
+        function calculateIrisRadius(landmarks, side) {
+            const irisPoints = side === 'left' ? LEFT_IRIS_POINTS : RIGHT_IRIS_POINTS;
+            const center = side === 'left' ? landmarks[LEFT_IRIS_CENTER] : landmarks[RIGHT_IRIS_CENTER];
+
+            let totalRadius = 0;
+            irisPoints.forEach(index => {
+                const point = landmarks[index];
+                const dx = (point.x - center.x) * canvas.width;
+                const dy = (point.y - center.y) * canvas.height;
+                totalRadius += Math.sqrt(dx * dx + dy * dy);
+            });
+
+            return totalRadius / irisPoints.length;
+        }
+
+        // Calculate all metrics
+        function calculateMetrics(landmarks) {
+            const leftIris = landmarks[LEFT_IRIS_CENTER];
+            const rightIris = landmarks[RIGHT_IRIS_CENTER];
+
+            // Calculate pixel distance between irises
+            const dx = (rightIris.x - leftIris.x) * canvas.width;
+            const dy = (rightIris.y - leftIris.y) * canvas.height;
+            const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+
+            // Calculate average iris radius
+            const leftRadius = calculateIrisRadius(landmarks, 'left');
+            const rightRadius = calculateIrisRadius(landmarks, 'right');
+            const avgIrisRadiusPx = (leftRadius + rightRadius) / 2;
+            const irisdiameterPx = avgIrisRadiusPx * 2;
+
+            // Calculate mm per pixel using iris as reference
+            const mmPerPixel = AVERAGE_IRIS_DIAMETER_MM / irisdiameterPx;
+
+            // Calculate IPD in mm
+            const ipdMm = pixelDistance * mmPerPixel;
+
+            // Calculate distance from camera (using iris size)
+            // Assuming a standard webcam focal length
+            const focalLengthPx = canvas.width * 0.8; // Approximate
+            const distanceCm = (AVERAGE_IRIS_DIAMETER_MM * focalLengthPx) / (irisdiameterPx * 10);
+
+            // Calculate left and right monocular PD
+            const noseBridge = landmarks[168]; // Nose bridge point
+            const leftPd = Math.abs(leftIris.x - noseBridge.x) * canvas.width * mmPerPixel;
+            const rightPd = Math.abs(rightIris.x - noseBridge.x) * canvas.width * mmPerPixel;
+
+            // Calculate lighting
+            const lighting = analyzeLighting();
+
+            // Calculate accuracy based on conditions
+            const accuracy = calculateAccuracy(distanceCm, lighting, landmarks);
+
+            return {
+                ipd: ipdMm,
+                leftPd: leftPd,
+                rightPd: rightPd,
+                distance: distanceCm,
+                lighting: lighting,
+                accuracy: accuracy
+            };
+        }
+
+        // Analyze lighting conditions
+        function analyzeLighting() {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            tempCtx.drawImage(video, 0, 0);
+
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+
+            let totalBrightness = 0;
+            let leftBrightness = 0;
+            let rightBrightness = 0;
+            const midX = tempCanvas.width / 2;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                totalBrightness += brightness;
+
+                const pixelIndex = i / 4;
+                const x = pixelIndex % tempCanvas.width;
+                
+                if (x < midX) {
+                    leftBrightness += brightness;
+                } else {
+                    rightBrightness += brightness;
+                }
+            }
+
+            const pixelCount = data.length / 4;
+            const avgBrightness = totalBrightness / pixelCount;
+            const normalizedBrightness = Math.min(100, (avgBrightness / 255) * 150);
+
+            // Check for even lighting
+            const halfPixels = pixelCount / 2;
+            const leftAvg = leftBrightness / halfPixels;
+            const rightAvg = rightBrightness / halfPixels;
+            const evenness = 100 - Math.abs(leftAvg - rightAvg);
+
+            // Combine brightness and evenness for overall lighting score
+            const lightingScore = (normalizedBrightness * 0.7 + evenness * 0.3);
+
+            return Math.round(Math.min(100, Math.max(0, lightingScore)));
+        }
+
+        // Calculate measurement accuracy
+        function calculateAccuracy(distance, lighting, landmarks) {
+            let accuracy = 100;
+
+            // Distance factor
+            if (distance < MIN_DISTANCE_CM) {
+                accuracy -= (MIN_DISTANCE_CM - distance) * 2;
+            } else if (distance > MAX_DISTANCE_CM) {
+                accuracy -= (distance - MAX_DISTANCE_CM) * 1.5;
+            } else {
+                // Optimal range bonus
+                const optimalDeviation = Math.abs(distance - IDEAL_DISTANCE_CM);
+                accuracy -= optimalDeviation * 0.5;
+            }
+
+            // Lighting factor
+            if (lighting < 40) {
+                accuracy -= (40 - lighting) * 0.5;
+            } else if (lighting < 60) {
+                accuracy -= (60 - lighting) * 0.3;
+            }
+
+            // Face angle factor (check if face is straight)
+            const leftEye = landmarks[33];
+            const rightEye = landmarks[263];
+            const eyeAngle = Math.atan2(
+                (rightEye.y - leftEye.y) * canvas.height,
+                (rightEye.x - leftEye.x) * canvas.width
+            ) * (180 / Math.PI);
+
+            accuracy -= Math.abs(eyeAngle) * 2;
+
+            return Math.round(Math.max(0, Math.min(100, accuracy)));
+        }
+
+        // Update metrics display
+        function updateMetricsDisplay(metrics) {
+            // IPD
+            ipdValue.innerHTML = `${metrics.ipd.toFixed(1)}<span>mm</span>`;
+            
+            let ipdStatusText = '';
+            let ipdStatusClass = '';
+            if (metrics.ipd >= 54 && metrics.ipd <= 74) {
+                ipdStatusText = 'Within normal range (54-74mm)';
+                ipdStatusClass = 'good';
+            } else if (metrics.ipd < 54) {
+                ipdStatusText = 'Below average range';
+                ipdStatusClass = 'warning';
+            } else {
+                ipdStatusText = 'Above average range';
+                ipdStatusClass = 'warning';
+            }
+            ipdStatus.className = `metric-status ${ipdStatusClass}`;
+            ipdStatus.querySelector('span').textContent = ipdStatusText;
+            ipdStatus.style.display = 'flex';
+
+            // Distance
+            distanceValue.innerHTML = `${metrics.distance.toFixed(0)}<span>cm</span>`;
+            const distancePercent = Math.min(100, Math.max(0, 
+                100 - Math.abs(metrics.distance - IDEAL_DISTANCE_CM) * 2.5
+            ));
+            distanceFill.style.width = `${distancePercent}%`;
+            
+            let distanceStatusText = '';
+            let distanceStatusClass = '';
+            if (metrics.distance >= 30 && metrics.distance <= 50) {
+                distanceStatusText = 'Optimal distance';
+                distanceStatusClass = 'good';
+                distanceFill.className = 'progress-fill good';
+            } else if (metrics.distance < 30) {
+                distanceStatusText = 'Move back slightly';
+                distanceStatusClass = 'warning';
+                distanceFill.className = 'progress-fill warning';
+            } else {
+                distanceStatusText = 'Move closer';
+                distanceStatusClass = 'warning';
+                distanceFill.className = 'progress-fill warning';
+            }
+            distanceStatus.className = `metric-status ${distanceStatusClass}`;
+            distanceStatus.querySelector('span').textContent = distanceStatusText;
+            distanceStatus.style.display = 'flex';
+
+            // Lighting
+            lightingValue.innerHTML = `${metrics.lighting}<span>%</span>`;
+            lightingFill.style.width = `${metrics.lighting}%`;
+            
+            let lightingStatusText = '';
+            let lightingStatusClass = '';
+            if (metrics.lighting >= 70) {
+                lightingStatusText = 'Excellent lighting';
+                lightingStatusClass = 'good';
+                lightingFill.className = 'progress-fill good';
+            } else if (metrics.lighting >= 50) {
+                lightingStatusText = 'Acceptable lighting';
+                lightingStatusClass = 'warning';
+                lightingFill.className = 'progress-fill warning';
+            } else {
+                lightingStatusText = 'Improve lighting';
+                lightingStatusClass = 'bad';
+                lightingFill.className = 'progress-fill bad';
+            }
+            lightingStatus.className = `metric-status ${lightingStatusClass}`;
+            lightingStatus.querySelector('span').textContent = lightingStatusText;
+            lightingStatus.style.display = 'flex';
+
+            // Accuracy
+            accuracyValue.textContent = `${metrics.accuracy}%`;
+            const circumference = 2 * Math.PI * 34;
+            const offset = circumference - (metrics.accuracy / 100) * circumference;
+            accuracyProgress.style.strokeDashoffset = offset;
+            
+            if (metrics.accuracy >= 80) {
+                accuracyProgress.style.stroke = 'var(--success)';
+            } else if (metrics.accuracy >= 60) {
+                accuracyProgress.style.stroke = 'var(--warning)';
+            } else {
+                accuracyProgress.style.stroke = 'var(--danger)';
+            }
+        }
+
+        // Update status badge
+        function updateStatus(text, type) {
+            statusText.textContent = text;
+            statusDot.className = 'status-dot';
+            if (type === 'warning') {
+                statusDot.classList.add('warning');
+            } else if (type === 'danger') {
+                statusDot.classList.add('danger');
+            }
+        }
+
+        // Reset metrics
+        function resetMetrics() {
+            ipdValue.innerHTML = '--<span>mm</span>';
+            distanceValue.innerHTML = '--<span>cm</span>';
+            lightingValue.innerHTML = '--<span>%</span>';
+            accuracyValue.textContent = '--%';
+            ipdStatus.style.display = 'none';
+            distanceStatus.style.display = 'none';
+            lightingStatus.style.display = 'none';
+            distanceFill.style.width = '0%';
+            lightingFill.style.width = '0%';
+            accuracyProgress.style.strokeDashoffset = 213.6;
+        }
+
+        // Capture measurement
+        captureBtn.addEventListener('click', () => {
+            if (!lastResults || !lastResults.faceLandmarks || lastResults.faceLandmarks.length === 0) {
+                alert('No face detected. Please position your face in the frame.');
+                return;
+            }
+
+            const landmarks = lastResults.faceLandmarks[0];
+            const metrics = calculateMetrics(landmarks);
+
+            // Show results modal
+            resultIpd.textContent = `${metrics.ipd.toFixed(1)} mm`;
+            resultLeft.textContent = `${metrics.leftPd.toFixed(1)} mm`;
+            resultRight.textContent = `${metrics.rightPd.toFixed(1)} mm`;
+            resultAccuracy.textContent = `${metrics.accuracy}%`;
+
+            resultsModal.classList.add('show');
+
+            // Store current measurement for saving
+            window.currentMeasurement = metrics;
+        });
+
+        // Save result
+        saveResult.addEventListener('click', () => {
+            const measurement = window.currentMeasurement;
+            if (measurement) {
+                const historyItem = {
+                    ipd: measurement.ipd.toFixed(1),
+                    accuracy: measurement.accuracy,
+                    timestamp: new Date().toLocaleString()
+                };
+
+                measurementHistory.unshift(historyItem);
+                if (measurementHistory.length > 10) {
+                    measurementHistory.pop();
+                }
+
+                updateHistoryDisplay();
+                localStorage.setItem('ipdHistory', JSON.stringify(measurementHistory));
+            }
+
+            resultsModal.classList.remove('show');
+        });
+
+        // Close modal
+        closeModal.addEventListener('click', () => {
+            resultsModal.classList.remove('show');
+        });
+
+        // Update history display
+        function updateHistoryDisplay() {
+            if (measurementHistory.length === 0) {
+                historyList.innerHTML = `
+                    <div class="history-empty">
+                        <i data-lucide="inbox" style="width: 32px; height: 32px; margin-bottom: 8px;"></i>
+                        <p>No measurements yet</p>
+                    </div>
+                `;
+            } else {
+                historyList.innerHTML = measurementHistory.map(item => `
+                    <div class="history-item">
+                        <div>
+                            <div class="history-ipd">${item.ipd} mm</div>
+                            <div class="history-meta">${item.timestamp}</div>
+                        </div>
+                        <div class="history-meta">${item.accuracy}% accuracy</div>
+                    </div>
+                `).join('');
+            }
+            lucide.createIcons();
+        }
+
+        // Clear history
+        clearHistory.addEventListener('click', () => {
+            measurementHistory = [];
+            localStorage.removeItem('ipdHistory');
+            updateHistoryDisplay();
+        });
+
+        // Load history from localStorage
+        function loadHistory() {
+            const saved = localStorage.getItem('ipdHistory');
+            if (saved) {
+                measurementHistory = JSON.parse(saved);
+                updateHistoryDisplay();
+            }
+        }
+
+        // Close modal on overlay click
+        resultsModal.addEventListener('click', (e) => {
+            if (e.target === resultsModal) {
+                resultsModal.classList.remove('show');
+            }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadHistory();
+            init();
+        });
+    </script>
+</body>
+</html>
