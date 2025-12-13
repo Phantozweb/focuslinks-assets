@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAPD Simulator - Professional Pupillary Response Testing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        
+        body {
+            overflow-x: hidden;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        
+        #examinationRoom {
+            transition: background 0.8s ease, background-color 0.8s ease;
+        }
+        
+        .room-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease, background 0.8s ease;
+            border-radius: inherit;
+        }
+        
+        .flashlight-handle {
+            cursor: grab;
+            touch-action: none;
+            filter: drop-shadow(0 8px 16px rgba(0,0,0,0.4));
+            transition: filter 0.15s;
+        }
+        
+        .flashlight-handle:active,
+        .flashlight-handle.dragging {
+            cursor: grabbing;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+        }
+        
+        .light-cone {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s ease;
+        }
+        
+        .light-cone.active {
+            opacity: 1;
+        }
+        
+        .eye-illumination {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        
+        .eye-illumination.active {
+            opacity: 1;
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #e5e7eb;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+        }
+        
+        input[type="range"]:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        input[type="range"]:disabled::-webkit-slider-thumb {
+            cursor: not-allowed;
+            background: #9ca3af;
+        }
+        
+        .response-badge {
+            font-size: 9px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            opacity: 0;
+            transform: translateY(5px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            white-space: nowrap;
+            display: inline-block;
+        }
+        
+        .response-badge.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .control-panel {
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+            transform: translateY(-1px);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        
+        .status-dot.active {
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+        
+        .status-dot.inactive {
+            background: #9ca3af;
+        }
+        
+        .drag-hint {
+            transition: opacity 0.3s ease;
+        }
+        
+        .eye-label {
+            transition: color 0.5s ease, background 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto px-3 py-4 md:py-6">
+        <!-- Header -->
+        <header class="text-center mb-4">
+            <h1 class="text-xl md:text-2xl font-bold text-gray-800">RAPD Simulator</h1>
+            <p class="text-gray-500 text-xs md:text-sm mt-1">Swinging Flashlight Test</p>
+        </header>
+
+        <div class="grid lg:grid-cols-4 gap-4">
+            <!-- Main Examination Area -->
+            <div class="lg:col-span-3">
+                <!-- Examination Room -->
+                <div id="examinationRoom" class="relative rounded-2xl overflow-hidden min-h-[480px] md:min-h-[520px]" style="background: linear-gradient(180deg, #e8eaed 0%, #d0d4d8 50%, #b8bcc0 100%);">
+                    
+                    <!-- Room Darkness Overlay (for smooth transitions) -->
+                    <div id="roomOverlay" class="room-overlay" style="background: radial-gradient(ellipse at center, #0a0a12 0%, #050508 50%, #000000 100%); opacity: 0;"></div>
+                    
+                    <!-- Room Lighting Indicator -->
+                    <div id="roomIndicator" class="absolute top-3 right-3 z-20 bg-white/90 backdrop-blur rounded-full px-3 py-1 text-xs font-medium text-gray-600 flex items-center gap-2 transition-all duration-500">
+                        <span id="roomIcon">☀️</span>
+                        <span id="roomText">Bright</span>
+                    </div>
+
+                    <!-- Eyes Section -->
+                    <div class="absolute top-[32%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10" id="eyesSection">
+                        
+                        <!-- Response Badges Row (Above Everything) -->
+                        <div class="flex justify-center items-center gap-8 md:gap-20 mb-3">
+                            <div class="text-center w-36 md:w-48">
+                                <div id="leftBadge" class="response-badge bg-blue-500 text-white shadow-lg">DIRECT</div>
+                            </div>
+                            <div class="w-6 md:w-8"></div>
+                            <div class="text-center w-36 md:w-48">
+                                <div id="rightBadge" class="response-badge bg-purple-500 text-white shadow-lg">CONSENSUAL</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Eye Labels -->
+                        <div class="flex justify-center items-center gap-8 md:gap-20 mb-2">
+                            <div class="text-center w-36 md:w-48">
+                                <span id="leftEyeLabel" class="eye-label text-xs font-bold text-blue-600 bg-blue-100/90 px-3 py-1 rounded-full shadow-sm">Left (OS)</span>
+                            </div>
+                            <div class="w-6 md:w-8"></div>
+                            <div class="text-center w-36 md:w-48">
+                                <span id="rightEyeLabel" class="eye-label text-xs font-bold text-blue-600 bg-blue-100/90 px-3 py-1 rounded-full shadow-sm">Right (OD)</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Eyes Row -->
+                        <div class="flex items-center gap-4 md:gap-8" id="eyesContainer">
+                            
+                            <!-- Left Eye -->
+                            <div class="relative" id="leftEyeContainer">
+                                <div id="leftIllumination" class="eye-illumination absolute -inset-8 rounded-full" style="background: radial-gradient(circle, rgba(255,250,205,0.7) 0%, rgba(255,245,157,0.4) 40%, transparent 70%);"></div>
+                                
+                                <svg id="leftEyeSvg" viewBox="0 0 180 120" class="w-36 h-24 md:w-48 md:h-32 relative z-10">
+                                    <defs>
+                                        <radialGradient id="scleraLeft" cx="50%" cy="45%" r="55%">
+                                            <stop offset="0%" stop-color="#ffffff"/>
+                                            <stop offset="50%" stop-color="#fefefe"/>
+                                            <stop offset="80%" stop-color="#f5f5f5"/>
+                                            <stop offset="100%" stop-color="#e8e8e8"/>
+                                        </radialGradient>
+                                        <radialGradient id="irisLeft" cx="35%" cy="35%" r="65%">
+                                            <stop offset="0%" stop-color="#6b9bc3"/>
+                                            <stop offset="30%" stop-color="#4a7ba3"/>
+                                            <stop offset="60%" stop-color="#2d5a7b"/>
+                                            <stop offset="100%" stop-color="#1a3a55"/>
+                                        </radialGradient>
+                                        <radialGradient id="pupilLeft" cx="30%" cy="30%" r="70%">
+                                            <stop offset="0%" stop-color="#0a0a0a"/>
+                                            <stop offset="100%" stop-color="#000000"/>
+                                        </radialGradient>
+                                        <filter id="shadowLeft">
+                                            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.25"/>
+                                        </filter>
+                                        <clipPath id="eyeShapeLeft">
+                                            <ellipse cx="90" cy="60" rx="80" ry="48"/>
+                                        </clipPath>
+                                    </defs>
+                                    
+                                    <ellipse cx="90" cy="62" rx="82" ry="50" fill="rgba(0,0,0,0.08)"/>
+                                    <ellipse cx="90" cy="60" rx="80" ry="48" fill="url(#scleraLeft)" filter="url(#shadowLeft)"/>
+                                    
+                                    <g clip-path="url(#eyeShapeLeft)" opacity="0.25">
+                                        <path d="M10 55 Q30 50 42 56" stroke="#c99" stroke-width="0.5" fill="none"/>
+                                        <path d="M12 65 Q35 70 45 63" stroke="#c99" stroke-width="0.4" fill="none"/>
+                                        <path d="M170 52 Q150 48 138 54" stroke="#c99" stroke-width="0.5" fill="none"/>
+                                        <path d="M168 68 Q145 72 135 65" stroke="#c99" stroke-width="0.4" fill="none"/>
+                                    </g>
+                                    
+                                    <circle cx="90" cy="60" r="30" fill="url(#irisLeft)"/>
+                                    
+                                    <g opacity="0.3">
+                                        <circle cx="90" cy="60" r="28" fill="none" stroke="#1a3a55" stroke-width="0.3" stroke-dasharray="2,3"/>
+                                        <circle cx="90" cy="60" r="24" fill="none" stroke="#1a3a55" stroke-width="0.25"/>
+                                    </g>
+                                    
+                                    <circle id="leftPupil" cx="90" cy="60" r="10" fill="url(#pupilLeft)"/>
+                                    
+                                    <ellipse cx="82" cy="52" rx="5" ry="3.5" fill="white" opacity="0.9"/>
+                                    <ellipse cx="80" cy="50" rx="2.5" ry="1.5" fill="white"/>
+                                    <ellipse cx="98" cy="68" rx="2" ry="1.2" fill="white" opacity="0.4"/>
+                                </svg>
+                            </div>
+
+                            <!-- Nose -->
+                            <div id="noseBridge" class="w-6 h-16 md:w-8 md:h-20 bg-gradient-to-b from-gray-200 via-gray-100 to-gray-200 rounded-full shadow-inner transition-opacity duration-500" style="opacity: 0.5;"></div>
+
+                            <!-- Right Eye -->
+                            <div class="relative" id="rightEyeContainer">
+                                <div id="rightIllumination" class="eye-illumination absolute -inset-8 rounded-full" style="background: radial-gradient(circle, rgba(255,250,205,0.7) 0%, rgba(255,245,157,0.4) 40%, transparent 70%);"></div>
+                                
+                                <svg id="rightEyeSvg" viewBox="0 0 180 120" class="w-36 h-24 md:w-48 md:h-32 relative z-10">
+                                    <defs>
+                                        <radialGradient id="scleraRight" cx="50%" cy="45%" r="55%">
+                                            <stop offset="0%" stop-color="#ffffff"/>
+                                            <stop offset="50%" stop-color="#fefefe"/>
+                                            <stop offset="80%" stop-color="#f5f5f5"/>
+                                            <stop offset="100%" stop-color="#e8e8e8"/>
+                                        </radialGradient>
+                                        <radialGradient id="irisRight" cx="35%" cy="35%" r="65%">
+                                            <stop offset="0%" stop-color="#6b9bc3"/>
+                                            <stop offset="30%" stop-color="#4a7ba3"/>
+                                            <stop offset="60%" stop-color="#2d5a7b"/>
+                                            <stop offset="100%" stop-color="#1a3a55"/>
+                                        </radialGradient>
+                                        <radialGradient id="pupilRight" cx="30%" cy="30%" r="70%">
+                                            <stop offset="0%" stop-color="#0a0a0a"/>
+                                            <stop offset="100%" stop-color="#000000"/>
+                                        </radialGradient>
+                                        <filter id="shadowRight">
+                                            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.25"/>
+                                        </filter>
+                                        <clipPath id="eyeShapeRight">
+                                            <ellipse cx="90" cy="60" rx="80" ry="48"/>
+                                        </clipPath>
+                                    </defs>
+                                    
+                                    <ellipse cx="90" cy="62" rx="82" ry="50" fill="rgba(0,0,0,0.08)"/>
+                                    <ellipse cx="90" cy="60" rx="80" ry="48" fill="url(#scleraRight)" filter="url(#shadowRight)"/>
+                                    
+                                    <g clip-path="url(#eyeShapeRight)" opacity="0.25">
+                                        <path d="M10 55 Q30 50 42 56" stroke="#c99" stroke-width="0.5" fill="none"/>
+                                        <path d="M12 65 Q35 70 45 63" stroke="#c99" stroke-width="0.4" fill="none"/>
+                                        <path d="M170 52 Q150 48 138 54" stroke="#c99" stroke-width="0.5" fill="none"/>
+                                        <path d="M168 68 Q145 72 135 65" stroke="#c99" stroke-width="0.4" fill="none"/>
+                                    </g>
+                                    
+                                    <circle cx="90" cy="60" r="30" fill="url(#irisRight)"/>
+                                    
+                                    <g opacity="0.3">
+                                        <circle cx="90" cy="60" r="28" fill="none" stroke="#1a3a55" stroke-width="0.3" stroke-dasharray="2,3"/>
+                                        <circle cx="90" cy="60" r="24" fill="none" stroke="#1a3a55" stroke-width="0.25"/>
+                                    </g>
+                                    
+                                    <circle id="rightPupil" cx="90" cy="60" r="10" fill="url(#pupilRight)"/>
+                                    
+                                    <ellipse cx="82" cy="52" rx="5" ry="3.5" fill="white" opacity="0.9"/>
+                                    <ellipse cx="80" cy="50" rx="2.5" ry="1.5" fill="white"/>
+                                    <ellipse cx="98" cy="68" rx="2" ry="1.2" fill="white" opacity="0.4"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Draggable Flashlight -->
+                    <div id="flashlight" class="flashlight-handle absolute z-40" style="left: 50%; bottom: 80px; transform: translateX(-50%);">
+                        
+                        <!-- Light cone -->
+                        <div id="lightCone" class="light-cone absolute pointer-events-none" style="bottom: 100%; left: 50%; transform: translateX(-50%); width: 120px; height: 160px;">
+                            <svg viewBox="0 0 120 160" class="w-full h-full" style="filter: blur(8px);">
+                                <defs>
+                                    <linearGradient id="coneGradient" x1="50%" y1="100%" x2="50%" y2="0%">
+                                        <stop offset="0%" stop-color="#fef9c3" stop-opacity="0.95"/>
+                                        <stop offset="30%" stop-color="#fde68a" stop-opacity="0.6"/>
+                                        <stop offset="60%" stop-color="#fcd34d" stop-opacity="0.3"/>
+                                        <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+                                    </linearGradient>
+                                </defs>
+                                <path d="M40 160 Q60 80 60 0 Q60 80 80 160 Z" fill="url(#coneGradient)"/>
+                                <ellipse cx="60" cy="145" rx="38" ry="18" fill="url(#coneGradient)" opacity="0.9"/>
+                            </svg>
+                        </div>
+                        
+                        <!-- Flashlight SVG -->
+                        <svg id="flashlightSvg" viewBox="0 0 60 100" class="w-14 h-24 md:w-16 md:h-28">
+                            <defs>
+                                <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#374151"/>
+                                    <stop offset="25%" stop-color="#4b5563"/>
+                                    <stop offset="50%" stop-color="#6b7280"/>
+                                    <stop offset="75%" stop-color="#4b5563"/>
+                                    <stop offset="100%" stop-color="#374151"/>
+                                </linearGradient>
+                                <radialGradient id="lensGrad" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#fefce8" id="lensInner"/>
+                                    <stop offset="40%" stop-color="#fef08a" id="lensMid"/>
+                                    <stop offset="100%" stop-color="#eab308" id="lensOuter"/>
+                                </radialGradient>
+                            </defs>
+                            
+                            <!-- Lens Head -->
+                            <ellipse cx="30" cy="10" rx="24" ry="9" fill="#b45309"/>
+                            <ellipse cx="30" cy="10" rx="20" ry="7" fill="url(#lensGrad)" id="flashlightLens"/>
+                            <ellipse cx="30" cy="10" rx="12" ry="4" fill="#fefce8" opacity="0.95"/>
+                            <ellipse cx="25" cy="7" rx="5" ry="2" fill="white"/>
+                            
+                            <!-- Head Ring -->
+                            <rect x="8" y="16" width="44" height="8" rx="2" fill="#78716c"/>
+                            <rect x="10" y="18" width="40" height="4" fill="#a8a29e"/>
+                            
+                            <!-- Body -->
+                            <rect x="12" y="24" width="36" height="42" rx="4" fill="url(#bodyGrad)"/>
+                            
+                            <!-- Grip -->
+                            <g stroke="#1f2937" stroke-width="1.5" opacity="0.35">
+                                <line x1="16" y1="32" x2="44" y2="32"/>
+                                <line x1="16" y1="40" x2="44" y2="40"/>
+                                <line x1="16" y1="48" x2="44" y2="48"/>
+                                <line x1="16" y1="56" x2="44" y2="56"/>
+                            </g>
+                            
+                            <!-- Power Button -->
+                            <rect x="22" y="26" width="16" height="5" rx="2" fill="#dc2626" id="powerBtn"/>
+                            <rect x="24" y="27" width="12" height="2" rx="1" fill="#fca5a5" opacity="0.6"/>
+                            
+                            <!-- Tail -->
+                            <rect x="16" y="66" width="28" height="12" rx="3" fill="#44403c"/>
+                            <rect x="20" y="78" width="20" height="10" rx="3" fill="#292524"/>
+                            <ellipse cx="30" cy="88" rx="8" ry="3" fill="#1c1917"/>
+                        </svg>
+                        
+                        <!-- Drag Hint -->
+                        <div id="dragHint" class="drag-hint absolute top-full mt-2 left-1/2 transform -translate-x-1/2 whitespace-nowrap text-xs text-gray-500 bg-white/95 px-3 py-1.5 rounded-full shadow-md">
+                            ☝️ Hold & drag toward eyes
+                        </div>
+                    </div>
+
+                    <!-- Auto Swing Button -->
+                    <div class="absolute bottom-3 left-1/2 transform -translate-x-1/2 z-30 flex gap-2">
+                        <button id="autoSwingBtn" class="btn-primary px-5 py-2.5 text-white text-xs md:text-sm rounded-full font-semibold flex items-center gap-2 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                            </svg>
+                            Auto Swing Test
+                        </button>
+                        <button id="stopSwingBtn" class="hidden btn-danger px-5 py-2.5 text-white text-xs md:text-sm rounded-full font-semibold flex items-center gap-2 transition-all">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <rect x="6" y="6" width="12" height="12" rx="2"/>
+                            </svg>
+                            Stop
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Bar -->
+                <div class="grid grid-cols-4 gap-2 mt-3">
+                    <div class="control-panel rounded-xl p-3 text-center">
+                        <div class="text-xs text-gray-400 mb-1">Light</div>
+                        <div id="lightStatus" class="font-bold text-sm text-gray-400 flex items-center justify-center">
+                            <span class="status-dot inactive"></span>Off
+                        </div>
+                    </div>
+                    <div class="control-panel rounded-xl p-3 text-center">
+                        <div class="text-xs text-gray-400 mb-1">Left (OS)</div>
+                        <div id="leftPupilDisplay" class="font-bold text-sm text-gray-700">4.0 mm</div>
+                    </div>
+                    <div class="control-panel rounded-xl p-3 text-center">
+                        <div class="text-xs text-gray-400 mb-1">Right (OD)</div>
+                        <div id="rightPupilDisplay" class="font-bold text-sm text-gray-700">4.0 mm</div>
+                    </div>
+                    <div class="control-panel rounded-xl p-3 text-center">
+                        <div class="text-xs text-gray-400 mb-1">Finding</div>
+                        <div id="findingDisplay" class="font-bold text-sm text-green-600">Normal</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="space-y-3">
+                <!-- Room Lighting -->
+                <div class="control-panel rounded-xl p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                        💡 Room Lighting
+                    </h3>
+                    <input type="range" id="roomLighting" min="0" max="100" value="70" class="w-full">
+                    <div class="flex justify-between text-xs text-gray-400 mt-2">
+                        <span>🌑 Dark</span>
+                        <span id="lightPercent" class="font-semibold text-gray-600">70%</span>
+                        <span>☀️ Bright</span>
+                    </div>
+                </div>
+
+                <!-- RAPD Settings -->
+                <div class="control-panel rounded-xl p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                        🔴 RAPD Configuration
+                    </h3>
+                    
+                    <div class="mb-4">
+                        <label class="text-xs text-gray-500 mb-2 block">Affected Eye</label>
+                        <div class="grid grid-cols-3 gap-1">
+                            <button data-eye="none" class="eye-btn active px-2 py-2 text-xs rounded-lg bg-blue-500 text-white font-semibold transition-all">None</button>
+                            <button data-eye="left" class="eye-btn px-2 py-2 text-xs rounded-lg bg-gray-100 text-gray-600 font-semibold transition-all hover:bg-gray-200">Left</button>
+                            <button data-eye="right" class="eye-btn px-2 py-2 text-xs rounded-lg bg-gray-100 text-gray-600 font-semibold transition-all hover:bg-gray-200">Right</button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-xs text-gray-500 mb-2 block">Grade: <span id="gradeLabel" class="text-blue-600 font-bold">—</span></label>
+                        <input type="range" id="rapdGrade" min="1" max="4" step="0.5" value="2" class="w-full" disabled>
+                        <div class="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>1+</span>
+                            <span>2+</span>
+                            <span>3+</span>
+                            <span>4+</span>
+                        </div>
+                        <p id="gradeHint" class="text-xs text-gray-400 mt-2 italic">Select affected eye first</p>
+                    </div>
+                </div>
+
+                <!-- Response Settings -->
+                <div class="control-panel rounded-xl p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                        ⚡ Pupil Response
+                    </h3>
+                    
+                    <div class="mb-3">
+                        <label class="text-xs text-gray-500 mb-1 block">Left Eye</label>
+                        <select id="leftResponse" class="w-full px-3 py-2 text-xs bg-gray-50 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none">
+                            <option value="normal">Normal (Brisk)</option>
+                            <option value="sluggish">Sluggish</option>
+                            <option value="fixed">Fixed (Non-reactive)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="text-xs text-gray-500 mb-1 block">Right Eye</label>
+                        <select id="rightResponse" class="w-full px-3 py-2 text-xs bg-gray-50 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none">
+                            <option value="normal">Normal (Brisk)</option>
+                            <option value="sluggish">Sluggish</option>
+                            <option value="fixed">Fixed (Non-reactive)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex items-center justify-between py-2 border-t border-gray-100 mt-2">
+                        <div>
+                            <label class="text-xs text-gray-600">Pupil Escape</label>
+                            <p class="text-[10px] text-gray-400">Dilation after initial constriction</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="escapeToggle" class="sr-only peer" checked>
+                            <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center justify-between py-2">
+                        <div>
+                            <label class="text-xs text-gray-600">Hippus</label>
+                            <p class="text-[10px] text-gray-400">Natural pupil oscillation</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="hippusToggle" class="sr-only peer" checked>
+                            <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Iris Color -->
+                <div class="control-panel rounded-xl p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                        👁️ Iris Color
+                    </h3>
+                    <div class="flex justify-between gap-2">
+                        <button data-iris="blue" class="iris-btn flex-1 aspect-square rounded-full bg-gradient-to-br from-blue-400 to-blue-800 ring-2 ring-blue-500 ring-offset-2 transition-all"></button>
+                        <button data-iris="brown" class="iris-btn flex-1 aspect-square rounded-full bg-gradient-to-br from-amber-600 to-amber-950 ring-2 ring-transparent ring-offset-2 hover:ring-amber-400 transition-all"></button>
+                        <button data-iris="green" class="iris-btn flex-1 aspect-square rounded-full bg-gradient-to-br from-green-500 to-green-900 ring-2 ring-transparent ring-offset-2 hover:ring-green-400 transition-all"></button>
+                        <button data-iris="gray" class="iris-btn flex-1 aspect-square rounded-full bg-gradient-to-br from-gray-400 to-gray-700 ring-2 ring-transparent ring-offset-2 hover:ring-gray-400 transition-all"></button>
+                        <button data-iris="hazel" class="iris-btn flex-1 aspect-square rounded-full bg-gradient-to-br from-amber-500 via-green-600 to-amber-800 ring-2 ring-transparent ring-offset-2 hover:ring-amber-400 transition-all"></button>
+                    </div>
+                </div>
+
+                <!-- Swing Speed -->
+                <div class="control-panel rounded-xl p-4">
+                    <h3 class="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                        ⏱️ Swing Speed
+                    </h3>
+                    <select id="swingSpeed" class="w-full px-3 py-2 text-xs bg-gray-50 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none">
+                        <option value="3000">Slow (3s)</option>
+                        <option value="2000" selected>Normal (2s)</option>
+                        <option value="1200">Fast (1.2s)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+            <div class="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-3">
+                <h4 class="font-bold text-green-800 text-xs mb-1">Normal</h4>
+                <p class="text-xs text-green-700">Equal bilateral constriction</p>
+            </div>
+            <div class="bg-gradient-to-br from-yellow-50 to-amber-100 rounded-xl p-3">
+                <h4 class="font-bold text-yellow-800 text-xs mb-1">1-2+ Mild</h4>
+                <p class="text-xs text-yellow-700">Initial constriction, then escape</p>
+            </div>
+            <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3">
+                <h4 class="font-bold text-orange-800 text-xs mb-1">3+ Moderate</h4>
+                <p class="text-xs text-orange-700">Immediate dilation on affected</p>
+            </div>
+            <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3">
+                <h4 class="font-bold text-red-800 text-xs mb-1">4+ Severe</h4>
+                <p class="text-xs text-red-700">No direct response (Amaurotic)</p>
+            </div>
+        </div>
+
+        <footer class="text-center text-xs text-gray-400 mt-4 pb-4">
+            RAPD Simulator • Educational Use Only
+        </footer>
+    </div>
+
+    <script>
+        class RAPDSimulator {
+            constructor() {
+                this.config = {
+                    affectedEye: 'none',
+                    rapdGrade: 2,
+                    roomLighting: 70,
+                    leftResponse: 'normal',
+                    rightResponse: 'normal',
+                    pupilEscape: true,
+                    hippus: true,
+                    irisColor: 'blue',
+                    swingSpeed: 2000
+                };
+
+                this.sizes = {
+                    darkMax: 24,
+                    darkBase: 20,
+                    brightBase: 9,
+                    brightMin: 4,
+                    irisRadius: 28
+                };
+
+                this.state = {
+                    leftPupil: 12,
+                    rightPupil: 12,
+                    leftTarget: 12,
+                    rightTarget: 12,
+                    leftFixedSize: null,
+                    rightFixedSize: null,
+                    illuminated: null,
+                    isDragging: false,
+                    isHolding: false,
+                    isSwinging: false,
+                    flashX: 0,
+                    flashY: 0,
+                    escapeTimeout: null,
+                    hippusTime: 0,
+                    swingInterval: null
+                };
+
+                this.eyePos = { left: {x:0, y:0}, right: {x:0, y:0} };
+                
+                this.irisColors = {
+                    blue: ['#6b9bc3', '#4a7ba3', '#2d5a7b', '#1a3a55'],
+                    brown: ['#a67c52', '#7a5c3c', '#5a3c22', '#3a2412'],
+                    green: ['#6b9b7a', '#4a7b5a', '#2d5b3a', '#1a3b25'],
+                    gray: ['#8b9ba5', '#6b7b85', '#4b5b65', '#3b4b55'],
+                    hazel: ['#9b8b5a', '#7b6b3a', '#5b5b2a', '#4b3b1a']
+                };
+
+                this.init();
+            }
+
+            init() {
+                this.cacheDOM();
+                this.bindEvents();
+                this.applyRoomLighting();
+                this.updateBasePupils();
+                
+                setTimeout(() => {
+                    this.calcEyePositions();
+                }, 100);
+                
+                this.startLoop();
+            }
+
+            cacheDOM() {
+                this.el = {
+                    room: document.getElementById('examinationRoom'),
+                    roomOverlay: document.getElementById('roomOverlay'),
+                    flashlight: document.getElementById('flashlight'),
+                    flashlightSvg: document.getElementById('flashlightSvg'),
+                    lightCone: document.getElementById('lightCone'),
+                    lens: document.getElementById('flashlightLens'),
+                    powerBtn: document.getElementById('powerBtn'),
+                    leftPupil: document.getElementById('leftPupil'),
+                    rightPupil: document.getElementById('rightPupil'),
+                    leftIllum: document.getElementById('leftIllumination'),
+                    rightIllum: document.getElementById('rightIllumination'),
+                    leftBadge: document.getElementById('leftBadge'),
+                    rightBadge: document.getElementById('rightBadge'),
+                    lightStatus: document.getElementById('lightStatus'),
+                    leftDisplay: document.getElementById('leftPupilDisplay'),
+                    rightDisplay: document.getElementById('rightPupilDisplay'),
+                    findingDisplay: document.getElementById('findingDisplay'),
+                    gradeLabel: document.getElementById('gradeLabel'),
+                    gradeSlider: document.getElementById('rapdGrade'),
+                    gradeHint: document.getElementById('gradeHint'),
+                    lightPercent: document.getElementById('lightPercent'),
+                    dragHint: document.getElementById('dragHint'),
+                    roomIcon: document.getElementById('roomIcon'),
+                    roomText: document.getElementById('roomText'),
+                    leftContainer: document.getElementById('leftEyeContainer'),
+                    rightContainer: document.getElementById('rightEyeContainer'),
+                    leftEyeLabel: document.getElementById('leftEyeLabel'),
+                    rightEyeLabel: document.getElementById('rightEyeLabel'),
+                    noseBridge: document.getElementById('noseBridge'),
+                    roomIndicator: document.getElementById('roomIndicator')
+                };
+            }
+
+            calcEyePositions() {
+                const roomRect = this.el.room.getBoundingClientRect();
+                const leftRect = this.el.leftContainer.getBoundingClientRect();
+                const rightRect = this.el.rightContainer.getBoundingClientRect();
+                
+                this.eyePos.left = {
+                    x: leftRect.left + leftRect.width/2 - roomRect.left,
+                    y: leftRect.top + leftRect.height/2 - roomRect.top
+                };
+                this.eyePos.right = {
+                    x: rightRect.left + rightRect.width/2 - roomRect.left,
+                    y: rightRect.top + rightRect.height/2 - roomRect.top
+                };
+            }
+
+            bindEvents() {
+                const flash = this.el.flashlight;
+                
+                const startDrag = (e) => {
+                    e.preventDefault();
+                    this.state.isDragging = true;
+                    this.state.isHolding = true;
+                    flash.classList.add('dragging');
+                    this.el.dragHint.style.opacity = '0';
+                    this.calcEyePositions();
+                };
+
+                const moveDrag = (e) => {
+                    if (!this.state.isDragging) return;
+                    if (this.state.isSwinging) return;
+                    
+                    e.preventDefault();
+                    const touch = e.touches ? e.touches[0] : e;
+                    const roomRect = this.el.room.getBoundingClientRect();
+                    
+                    let x = touch.clientX - roomRect.left;
+                    let y = touch.clientY - roomRect.top;
+                    
+                    x = Math.max(40, Math.min(roomRect.width - 40, x));
+                    y = Math.max(60, Math.min(roomRect.height - 50, y));
+                    
+                    flash.style.left = x + 'px';
+                    flash.style.top = y + 'px';
+                    flash.style.bottom = 'auto';
+                    flash.style.transform = 'translate(-50%, -50%)';
+                    
+                    this.state.flashX = x;
+                    this.state.flashY = y;
+                    
+                    this.checkLensProximity();
+                };
+
+                const endDrag = () => {
+                    this.state.isDragging = false;
+                    this.state.isHolding = false;
+                    flash.classList.remove('dragging');
+                    
+                    this.state.illuminated = null;
+                    this.onIlluminationChange();
+                    
+                    if (!this.state.isSwinging) {
+                        this.el.dragHint.style.opacity = '1';
+                    }
+                };
+
+                flash.addEventListener('mousedown', startDrag);
+                flash.addEventListener('touchstart', startDrag, {passive: false});
+                document.addEventListener('mousemove', moveDrag);
+                document.addEventListener('touchmove', moveDrag, {passive: false});
+                document.addEventListener('mouseup', endDrag);
+                document.addEventListener('touchend', endDrag);
+
+                window.addEventListener('resize', () => {
+                    this.calcEyePositions();
+                });
+
+                // Room lighting with smooth transition
+                document.getElementById('roomLighting').addEventListener('input', (e) => {
+                    this.config.roomLighting = parseInt(e.target.value);
+                    this.el.lightPercent.textContent = this.config.roomLighting + '%';
+                    this.applyRoomLighting();
+                    this.updateBasePupils();
+                });
+
+                // Affected eye
+                document.querySelectorAll('.eye-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.eye-btn').forEach(b => {
+                            b.classList.remove('active', 'bg-blue-500', 'text-white');
+                            b.classList.add('bg-gray-100', 'text-gray-600');
+                        });
+                        e.target.classList.add('active', 'bg-blue-500', 'text-white');
+                        e.target.classList.remove('bg-gray-100', 'text-gray-600');
+                        this.config.affectedEye = e.target.dataset.eye;
+                        
+                        if (this.config.affectedEye === 'none') {
+                            this.el.gradeSlider.disabled = true;
+                            this.el.gradeLabel.textContent = '—';
+                            this.el.gradeHint.textContent = 'Select affected eye first';
+                            this.el.gradeHint.style.display = 'block';
+                        } else {
+                            this.el.gradeSlider.disabled = false;
+                            this.el.gradeLabel.textContent = this.config.rapdGrade + '+';
+                            this.el.gradeHint.style.display = 'none';
+                        }
+                        
+                        this.updateFinding();
+                    });
+                });
+
+                // RAPD Grade
+                document.getElementById('rapdGrade').addEventListener('input', (e) => {
+                    this.config.rapdGrade = parseFloat(e.target.value);
+                    this.el.gradeLabel.textContent = this.config.rapdGrade + '+';
+                    this.updateFinding();
+                });
+
+                // Response types
+                document.getElementById('leftResponse').addEventListener('change', (e) => {
+                    this.config.leftResponse = e.target.value;
+                    if (e.target.value === 'fixed') {
+                        this.state.leftFixedSize = this.state.leftPupil;
+                    } else {
+                        this.state.leftFixedSize = null;
+                    }
+                });
+                
+                document.getElementById('rightResponse').addEventListener('change', (e) => {
+                    this.config.rightResponse = e.target.value;
+                    if (e.target.value === 'fixed') {
+                        this.state.rightFixedSize = this.state.rightPupil;
+                    } else {
+                        this.state.rightFixedSize = null;
+                    }
+                });
+
+                // Toggles
+                document.getElementById('escapeToggle').addEventListener('change', (e) => {
+                    this.config.pupilEscape = e.target.checked;
+                });
+                document.getElementById('hippusToggle').addEventListener('change', (e) => {
+                    this.config.hippus = e.target.checked;
+                });
+
+                // Iris color
+                document.querySelectorAll('.iris-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.iris-btn').forEach(b => {
+                            b.className = b.className.replace(/ring-\w+-500/g, 'ring-transparent');
+                        });
+                        const color = e.target.dataset.iris;
+                        const ringMap = {blue:'ring-blue-500', brown:'ring-amber-500', green:'ring-green-500', gray:'ring-gray-500', hazel:'ring-amber-500'};
+                        e.target.classList.remove('ring-transparent');
+                        e.target.classList.add(ringMap[color]);
+                        this.config.irisColor = color;
+                        this.applyIrisColor();
+                    });
+                });
+
+                // Swing speed
+                document.getElementById('swingSpeed').addEventListener('change', (e) => {
+                    this.config.swingSpeed = parseInt(e.target.value);
+                });
+
+                // Auto swing
+                document.getElementById('autoSwingBtn').addEventListener('click', () => this.startSwing());
+                document.getElementById('stopSwingBtn').addEventListener('click', () => this.stopSwing());
+            }
+
+            checkLensProximity() {
+                if (!this.state.isHolding && !this.state.isSwinging) return;
+
+                const flashRect = this.el.flashlightSvg.getBoundingClientRect();
+                const lensOffsetFromCenter = flashRect.height * 0.4;
+                
+                const lensX = this.state.flashX;
+                const lensY = this.state.flashY - lensOffsetFromCenter;
+                
+                const threshold = 75;
+                
+                const distLeft = Math.hypot(lensX - this.eyePos.left.x, lensY - this.eyePos.left.y);
+                const distRight = Math.hypot(lensX - this.eyePos.right.x, lensY - this.eyePos.right.y);
+                
+                let newIllum = null;
+                
+                if (distLeft < threshold && distLeft <= distRight) {
+                    newIllum = 'left';
+                } else if (distRight < threshold) {
+                    newIllum = 'right';
+                }
+
+                if (newIllum !== this.state.illuminated) {
+                    this.state.illuminated = newIllum;
+                    this.onIlluminationChange();
+                }
+            }
+
+            onIlluminationChange() {
+                if (this.state.escapeTimeout) {
+                    clearTimeout(this.state.escapeTimeout);
+                    this.state.escapeTimeout = null;
+                }
+
+                if (this.state.illuminated && (this.state.isHolding || this.state.isSwinging)) {
+                    this.showLight(true);
+                    this.calculateResponse();
+                    
+                    if (this.config.pupilEscape && this.config.affectedEye !== 'none') {
+                        this.schedulePupilEscape();
+                    }
+                } else {
+                    this.showLight(false);
+                    this.returnToBaseline();
+                }
+
+                this.updateStatusDisplay();
+            }
+
+            showLight(on) {
+                const cone = this.el.lightCone;
+                const lens = this.el.lens;
+                const btn = this.el.powerBtn;
+                
+                const roomFactor = 1 - (this.config.roomLighting / 100) * 0.5;
+                
+                if (on) {
+                    cone.classList.add('active');
+                    cone.style.opacity = 0.7 + roomFactor * 0.3;
+                    lens.style.filter = `brightness(${1.3 + roomFactor * 0.2}) saturate(1.2)`;
+                    btn.style.fill = '#22c55e';
+                    
+                    if (this.state.illuminated === 'left') {
+                        this.el.leftIllum.classList.add('active');
+                        this.el.leftIllum.style.opacity = 0.5 + roomFactor * 0.4;
+                        this.el.rightIllum.classList.remove('active');
+                    } else {
+                        this.el.rightIllum.classList.add('active');
+                        this.el.rightIllum.style.opacity = 0.5 + roomFactor * 0.4;
+                        this.el.leftIllum.classList.remove('active');
+                    }
+                } else {
+                    cone.classList.remove('active');
+                    lens.style.filter = '';
+                    btn.style.fill = '#dc2626';
+                    this.el.leftIllum.classList.remove('active');
+                    this.el.rightIllum.classList.remove('active');
+                }
+                
+                this.updateBadges();
+            }
+
+            updateBadges() {
+                const illum = this.state.illuminated;
+                
+                if (illum === 'left') {
+                    this.el.leftBadge.textContent = 'DIRECT';
+                    this.el.leftBadge.className = 'response-badge bg-blue-500 text-white shadow-lg visible';
+                    this.el.rightBadge.textContent = 'CONSENSUAL';
+                    this.el.rightBadge.className = 'response-badge bg-purple-500 text-white shadow-lg visible';
+                } else if (illum === 'right') {
+                    this.el.rightBadge.textContent = 'DIRECT';
+                    this.el.rightBadge.className = 'response-badge bg-blue-500 text-white shadow-lg visible';
+                    this.el.leftBadge.textContent = 'CONSENSUAL';
+                    this.el.leftBadge.className = 'response-badge bg-purple-500 text-white shadow-lg visible';
+                } else {
+                    this.el.leftBadge.classList.remove('visible');
+                    this.el.rightBadge.classList.remove('visible');
+                }
+            }
+
+            getBaselinePupilSize() {
+                const light = this.config.roomLighting / 100;
+                return this.sizes.darkMax - (this.sizes.darkMax - this.sizes.brightBase) * light;
+            }
+
+            getConstrictedSize() {
+                const light = this.config.roomLighting / 100;
+                const darkConstrict = this.sizes.brightMin + 3;
+                const brightConstrict = this.sizes.brightMin;
+                return brightConstrict + (darkConstrict - brightConstrict) * (1 - light);
+            }
+
+            getResponseSpeed(eye) {
+                const response = this.config[eye + 'Response'];
+                switch(response) {
+                    case 'sluggish': return 0.025;
+                    case 'fixed': return 0;
+                    default: return 0.12;
+                }
+            }
+
+            calculateResponse() {
+                const illum = this.state.illuminated;
+                const affected = this.config.affectedEye;
+                const grade = this.config.rapdGrade;
+                
+                const baseline = this.getBaselinePupilSize();
+                const constricted = this.getConstrictedSize();
+                
+                let leftTarget = this.state.leftTarget;
+                let rightTarget = this.state.rightTarget;
+
+                if (affected === 'none') {
+                    if (illum === 'left') {
+                        if (this.config.leftResponse !== 'fixed') leftTarget = constricted;
+                        if (this.config.rightResponse !== 'fixed') rightTarget = constricted + 1;
+                    } else {
+                        if (this.config.rightResponse !== 'fixed') rightTarget = constricted;
+                        if (this.config.leftResponse !== 'fixed') leftTarget = constricted + 1;
+                    }
+                } else {
+                    const factor = grade / 4;
+                    
+                    if (illum === affected) {
+                        const poorDirect = constricted + (baseline - constricted) * factor * 0.85;
+                        const weakConsensual = constricted + (baseline - constricted) * factor * 0.35;
+                        
+                        if (affected === 'left') {
+                            if (this.config.leftResponse !== 'fixed') leftTarget = poorDirect;
+                            if (this.config.rightResponse !== 'fixed') rightTarget = weakConsensual;
+                        } else {
+                            if (this.config.rightResponse !== 'fixed') rightTarget = poorDirect;
+                            if (this.config.leftResponse !== 'fixed') leftTarget = weakConsensual;
+                        }
+                    } else {
+                        const goodDirect = constricted;
+                        const okConsensual = constricted + (baseline - constricted) * factor * 0.15;
+                        
+                        if (affected === 'left') {
+                            if (this.config.leftResponse !== 'fixed') leftTarget = okConsensual;
+                            if (this.config.rightResponse !== 'fixed') rightTarget = goodDirect;
+                        } else {
+                            if (this.config.rightResponse !== 'fixed') rightTarget = okConsensual;
+                            if (this.config.leftResponse !== 'fixed') leftTarget = goodDirect;
+                        }
+                    }
+                }
+
+                this.state.leftTarget = leftTarget;
+                this.state.rightTarget = rightTarget;
+            }
+
+            schedulePupilEscape() {
+                this.state.escapeTimeout = setTimeout(() => {
+                    if (this.state.illuminated === this.config.affectedEye && (this.state.isHolding || this.state.isSwinging)) {
+                        const baseline = this.getBaselinePupilSize();
+                        const factor = this.config.rapdGrade / 4;
+                        
+                        if (this.config.affectedEye === 'left' && this.config.leftResponse !== 'fixed') {
+                            this.state.leftTarget += (baseline - this.state.leftTarget) * factor * 0.5;
+                        } else if (this.config.affectedEye === 'right' && this.config.rightResponse !== 'fixed') {
+                            this.state.rightTarget += (baseline - this.state.rightTarget) * factor * 0.5;
+                        }
+                    }
+                }, 600);
+            }
+
+            returnToBaseline() {
+                const baseline = this.getBaselinePupilSize();
+                if (this.config.leftResponse !== 'fixed') {
+                    this.state.leftTarget = baseline;
+                }
+                if (this.config.rightResponse !== 'fixed') {
+                    this.state.rightTarget = baseline;
+                }
+            }
+
+            updateBasePupils() {
+                if (!this.state.illuminated) {
+                    this.returnToBaseline();
+                }
+            }
+
+            applyRoomLighting() {
+                const light = this.config.roomLighting;
+                
+                // Calculate darkness level (0 = bright, 1 = dark)
+                const darkness = 1 - (light / 100);
+                
+                // Smooth overlay opacity transition
+                this.el.roomOverlay.style.opacity = darkness;
+                
+                // Update nose bridge visibility
+                this.el.noseBridge.style.opacity = 0.2 + (light / 100) * 0.4;
+                
+                // Update labels for dark mode
+                if (light < 30) {
+                    this.el.roomIcon.textContent = '🌑';
+                    this.el.roomText.textContent = 'Dark';
+                    this.el.leftEyeLabel.style.background = 'rgba(30, 64, 175, 0.9)';
+                    this.el.leftEyeLabel.style.color = '#bfdbfe';
+                    this.el.rightEyeLabel.style.background = 'rgba(30, 64, 175, 0.9)';
+                    this.el.rightEyeLabel.style.color = '#bfdbfe';
+                    this.el.roomIndicator.style.background = 'rgba(0,0,0,0.6)';
+                    this.el.roomIndicator.style.color = '#e5e7eb';
+                } else if (light < 50) {
+                    this.el.roomIcon.textContent = '🌙';
+                    this.el.roomText.textContent = 'Dim';
+                    this.el.leftEyeLabel.style.background = 'rgba(59, 130, 246, 0.85)';
+                    this.el.leftEyeLabel.style.color = '#dbeafe';
+                    this.el.rightEyeLabel.style.background = 'rgba(59, 130, 246, 0.85)';
+                    this.el.rightEyeLabel.style.color = '#dbeafe';
+                    this.el.roomIndicator.style.background = 'rgba(0,0,0,0.4)';
+                    this.el.roomIndicator.style.color = '#d1d5db';
+                } else {
+                    this.el.roomIcon.textContent = '☀️';
+                    this.el.roomText.textContent = 'Bright';
+                    this.el.leftEyeLabel.style.background = 'rgba(219, 234, 254, 0.9)';
+                    this.el.leftEyeLabel.style.color = '#1e40af';
+                    this.el.rightEyeLabel.style.background = 'rgba(219, 234, 254, 0.9)';
+                    this.el.rightEyeLabel.style.color = '#1e40af';
+                    this.el.roomIndicator.style.background = 'rgba(255,255,255,0.9)';
+                    this.el.roomIndicator.style.color = '#4b5563';
+                }
+            }
+
+            applyIrisColor() {
+                const colors = this.irisColors[this.config.irisColor];
+                
+                ['Left', 'Right'].forEach(side => {
+                    const grad = document.getElementById('iris' + side);
+                    if (grad) {
+                        const stops = grad.querySelectorAll('stop');
+                        colors.forEach((c, i) => {
+                            if (stops[i]) stops[i].setAttribute('stop-color', c);
+                        });
+                    }
+                });
+            }
+
+            updateStatusDisplay() {
+                const illum = this.state.illuminated;
+                
+                if (illum && (this.state.isHolding || this.state.isSwinging)) {
+                    const label = illum === 'left' ? 'Left (OS)' : 'Right (OD)';
+                    this.el.lightStatus.innerHTML = `<span class="status-dot active"></span>${label}`;
+                    this.el.lightStatus.className = 'font-bold text-sm text-green-600 flex items-center justify-center';
+                } else {
+                    this.el.lightStatus.innerHTML = `<span class="status-dot inactive"></span>Off`;
+                    this.el.lightStatus.className = 'font-bold text-sm text-gray-400 flex items-center justify-center';
+                }
+                
+                this.updateFinding();
+            }
+
+            updateFinding() {
+                const affected = this.config.affectedEye;
+                
+                if (affected === 'none') {
+                    this.el.findingDisplay.textContent = 'Normal';
+                    this.el.findingDisplay.className = 'font-bold text-sm text-green-600';
+                } else {
+                    const grade = this.config.rapdGrade;
+                    const eye = affected === 'left' ? 'OS' : 'OD';
+                    this.el.findingDisplay.textContent = `${grade}+ RAPD (${eye})`;
+                    
+                    if (grade <= 1.5) {
+                        this.el.findingDisplay.className = 'font-bold text-sm text-yellow-600';
+                    } else if (grade <= 3) {
+                        this.el.findingDisplay.className = 'font-bold text-sm text-orange-600';
+                    } else {
+                        this.el.findingDisplay.className = 'font-bold text-sm text-red-600';
+                    }
+                }
+            }
+
+            startSwing() {
+                if (this.state.isSwinging) return;
+                
+                this.state.isSwinging = true;
+                this.state.isHolding = true;
+                document.getElementById('autoSwingBtn').classList.add('hidden');
+                document.getElementById('stopSwingBtn').classList.remove('hidden');
+                this.el.dragHint.style.opacity = '0';
+                
+                this.calcEyePositions();
+                
+                const eyeBottomY = Math.max(this.eyePos.left.y, this.eyePos.right.y) + 85;
+                
+                let currentEye = 'left';
+                
+                const doSwing = () => {
+                    const targetX = this.eyePos[currentEye].x;
+                    const targetY = eyeBottomY;
+                    
+                    this.animateFlashTo(targetX, targetY, () => {
+                        this.state.flashX = targetX;
+                        this.state.flashY = targetY;
+                        this.checkLensProximity();
+                    });
+                    
+                    currentEye = currentEye === 'left' ? 'right' : 'left';
+                };
+                
+                doSwing();
+                this.state.swingInterval = setInterval(doSwing, this.config.swingSpeed);
+            }
+
+            animateFlashTo(x, y, callback) {
+                const flash = this.el.flashlight;
+                const roomRect = this.el.room.getBoundingClientRect();
+                
+                const startX = this.state.flashX || roomRect.width / 2;
+                const startY = this.state.flashY || roomRect.height - 100;
+                const duration = 250;
+                const startTime = performance.now();
+                
+                const animate = (time) => {
+                    const elapsed = time - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const ease = 1 - Math.pow(1 - progress, 3);
+                    
+                    const curX = startX + (x - startX) * ease;
+                    const curY = startY + (y - startY) * ease;
+                    
+                    flash.style.left = curX + 'px';
+                    flash.style.top = curY + 'px';
+                    flash.style.bottom = 'auto';
+                    flash.style.transform = 'translate(-50%, -50%)';
+                    
+                    this.state.flashX = curX;
+                    this.state.flashY = curY;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else if (callback) {
+                        callback();
+                    }
+                };
+                
+                requestAnimationFrame(animate);
+            }
+
+            stopSwing() {
+                this.state.isSwinging = false;
+                this.state.isHolding = false;
+                clearInterval(this.state.swingInterval);
+                this.state.swingInterval = null;
+                
+                document.getElementById('autoSwingBtn').classList.remove('hidden');
+                document.getElementById('stopSwingBtn').classList.add('hidden');
+                
+                this.state.illuminated = null;
+                this.onIlluminationChange();
+                
+                const flash = this.el.flashlight;
+                flash.style.left = '50%';
+                flash.style.top = 'auto';
+                flash.style.bottom = '80px';
+                flash.style.transform = 'translateX(-50%)';
+                this.el.dragHint.style.opacity = '1';
+            }
+
+            startLoop() {
+                const loop = (time) => {
+                    this.state.hippusTime = time;
+                    this.animatePupils();
+                    this.updateDisplays();
+                    requestAnimationFrame(loop);
+                };
+                requestAnimationFrame(loop);
+            }
+
+            animatePupils() {
+                if (this.config.leftResponse !== 'fixed') {
+                    const leftSpeed = this.getResponseSpeed('left');
+                    this.state.leftPupil += (this.state.leftTarget - this.state.leftPupil) * leftSpeed;
+                }
+                
+                if (this.config.rightResponse !== 'fixed') {
+                    const rightSpeed = this.getResponseSpeed('right');
+                    this.state.rightPupil += (this.state.rightTarget - this.state.rightPupil) * rightSpeed;
+                }
+                
+                let leftSize = this.state.leftPupil;
+                let rightSize = this.state.rightPupil;
+                
+                if (this.config.hippus && !this.state.illuminated) {
+                    const osc = Math.sin(this.state.hippusTime / 1500) * 0.4;
+                    if (this.config.leftResponse !== 'fixed') leftSize += osc;
+                    if (this.config.rightResponse !== 'fixed') rightSize += osc;
+                }
+                
+                leftSize = Math.max(3, Math.min(this.sizes.irisRadius, leftSize));
+                rightSize = Math.max(3, Math.min(this.sizes.irisRadius, rightSize));
+                
+                this.el.leftPupil.setAttribute('r', leftSize);
+                this.el.rightPupil.setAttribute('r', rightSize);
+            }
+
+            updateDisplays() {
+                const leftMm = (this.state.leftPupil / 2.8).toFixed(1);
+                const rightMm = (this.state.rightPupil / 2.8).toFixed(1);
+                
+                this.el.leftDisplay.textContent = leftMm + ' mm';
+                this.el.rightDisplay.textContent = rightMm + ' mm';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new RAPDSimulator();
+        });
+    </script>
+</body>
+</html>
