@@ -1,0 +1,14 @@
+[
+  {
+    "email": "testuser1@example.com",
+    "accessCode": "ALPHA-1234"
+  },
+  {
+    "email": "testuser2@example.com",
+    "accessCode": "BETA-5678"
+  },
+  {
+    "email": "early@adopter.com",
+    "accessCode": "GAMMA-9101"
+  }
+]
